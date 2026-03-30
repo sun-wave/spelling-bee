@@ -1,12 +1,15 @@
 import os
 import discord
 from discord.ext import commands
-from datetime import datetime
+from datetime import datetime, timedelta
 from dateutil import parser as date_parser
+from dotenv import load_dotenv
+
 from scraper import fetch_sb_data, get_sb_number
 from game_logic import Game
 
-# Environment variable for token
+# Load environment variables from .env file
+load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 intents = discord.Intents.default()
@@ -32,76 +35,60 @@ async def sb(ctx, *, date_str: str = None):
     else:
         date_obj = datetime.now()
 
-    sb_number = get_sb_number(date_obj)
-    await ctx.send(f"Fetching Spelling Bee #{sb_number} for {date_obj.strftime('%Y-%m-%d')}...")
-    
-    data = await fetch_sb_data(sb_number)
-    if not data:
-        # If the specific number fails, try "latest"
-        await ctx.send("Could not find data for that date. Trying to fetch the latest available puzzle...")
-        # Since I don't know the exact "latest" number, I could try a few increments, but
-        # a better way is to just use a special "latest" endpoint if SBSolver has one.
-        # SBSolver has /latest
-        # Let's try to fetch from /latest
-        import aiohttp
-        from bs4 import BeautifulSoup
-        async with aiohttp.ClientSession() as session:
-            async with session.get("https://www.sbsolver.com/latest") as response:
-                # This usually redirects or provides the latest content
-                if response.status == 200:
-                    html = await response.text()
-                    soup = BeautifulSoup(html, "html.parser")
-                    # Try to extract data from this page
-                    # I'll just reuse the same extraction logic by parsing the current URL or the input
-                    letters_input = soup.find("input", id="string")
-                    if letters_input:
-                        letters_str = letters_input.get("value", "")
-                        center = letters_str[0].upper()
-                        outer = [c.upper() for c in letters_str[1:]]
-                        # Words
-                        words = []
-                        table = soup.find("table", class_="bee-set")
-                        if table:
-                            rows = table.find_all("tr")
-                            for row in rows:
-                                word_td = row.find("td", class_="bee-hover")
-                                if word_td:
-                                    word = word_td.get_text(strip=True).upper()
-                                    words.append(word)
-                        if words:
-                            data = {"center": center, "outer": outer, "words": words}
-                
-    if not data:
-        await ctx.send("Error: Could not retrieve Spelling Bee data.")
-        return
+    # Attempt to fetch today's spelling bee data
+    current_date_obj = date_obj
+    current_sb_number = get_sb_number(current_date_obj)
+    data = await fetch_sb_data(current_sb_number)
 
-    game = Game(data["center"], data["outer"], data["words"])
+    if not data:
+        # If today's data is not found, try yesterday's
+        yesterday_date_obj = current_date_obj - timedelta(days=1)
+        yesterday_sb_number = get_sb_number(yesterday_date_obj)
+        data = await fetch_sb_data(yesterday_sb_number)
+        
+        if not data:
+            # If yesterday's also fails, send an error
+            await ctx.send("Error: Could not retrieve Spelling Bee data for today or yesterday.")
+            return
+        else:
+            # Use yesterday's date for the embed message if found
+            date_to_display = yesterday_date_obj
+            sb_num_to_display = yesterday_sb_number
+    else:
+        # Use today's date if found
+        date_to_display = current_date_obj
+        sb_num_to_display = current_sb_number
+
+    game = Game(data["center"], data["outer"], data["words"], data["pangrams"], reactions_enabled=False)
     active_games[ctx.channel.id] = game
     
-    # Format message
-    outer_letters = " ".join(game.outer)
-    msg = f"**Spelling Bee Started!**\n"
-    msg += f"Center Letter (Must be used): **{game.center}**\n"
-    msg += f"Other Letters: {outer_letters}\n"
-    msg += f"Total Words to find: {len(game.all_words)}"
-    
-    await ctx.send(msg)
+    await ctx.send(embed=game.get_game_start_embed(sb_num_to_display, date_to_display.strftime('%Y-%m-%d')))
+@bot.command()
+async def sbreact(ctx):
+    """Toggle reactions for the current Spelling Bee game."""
+    if ctx.channel.id in active_games:
+        game = active_games[ctx.channel.id]
+        game.reactions_enabled = not game.reactions_enabled
+        status = "enabled" if game.reactions_enabled else "disabled"
+        await ctx.send(f"Word reactions are now **{status}**.")
+    else:
+        await ctx.send("No active game in this channel.")
 
 @bot.command()
 async def sbend(ctx):
     """End the current Spelling Bee game."""
     if ctx.channel.id in active_games:
         game = active_games.pop(ctx.channel.id)
-        await ctx.send(game.get_stats_message())
+        await ctx.send("Game ended manually.", embed=game.get_stats_embed(title="Spelling Bee - Final Results"))
     else:
-        await ctx.send("No active game in this channel.")
+        await ctx.send("No active game to end.")
 
 @bot.command()
 async def sbhint(ctx):
     """Get hints for the current game."""
     if ctx.channel.id in active_games:
         game = active_games[ctx.channel.id]
-        await ctx.send(game.get_hints())
+        await ctx.send(embed=game.get_hints_embed())
     else:
         await ctx.send("No active game in this channel.")
 
@@ -110,7 +97,7 @@ async def ans(ctx):
     """Show found words."""
     if ctx.channel.id in active_games:
         game = active_games[ctx.channel.id]
-        await ctx.send(game.get_found_words())
+        await ctx.send(embed=game.get_found_words_embed())
     else:
         await ctx.send("No active game in this channel.")
 
@@ -119,30 +106,36 @@ async def on_message(message):
     if message.author.bot:
         return
 
-    # Check for game commands first
-    await bot.process_commands(message)
+    # Process commands
+    if message.content.startswith(";"):
+        await bot.process_commands(message)
+        return
 
-    # Check if message is a guess
+    # Check for game guess
     if message.channel.id in active_games:
         content = message.content.strip().upper()
-        # Ensure it's a single word and not a command
-        if len(content.split()) == 1 and not content.startswith(";"):
+        # Single word check
+        if len(content.split()) == 1:
             game = active_games[message.channel.id]
             if game.is_valid_word(content):
-                game.add_found_word(content, message.author.name)
-                # Check if game complete
+                game.add_found_word(content, message.author.mention)
+                
                 if game.is_complete():
                     await message.channel.send(f"Correct! **{content}**")
                     game = active_games.pop(message.channel.id)
-                    await message.channel.send(game.get_stats_message())
+                    await message.channel.send(
+                        content="🐝 **QUEEN BEE!** 🐝\nAll words have been found!",
+                        embed=game.get_stats_embed(title="Spelling Bee - Queen Bee Victory!")
+                    )
                 else:
-                    # Optional: Add a reaction or short message for correct guess
-                    await message.add_reaction("✅")
+                    if game.reactions_enabled:
+                        await message.add_reaction("✅")
             elif content in game.found_words:
-                await message.add_reaction("🔁") # Already found
+                if game.reactions_enabled:
+                    await message.add_reaction("🔁")
 
 if __name__ == "__main__":
     if not TOKEN:
-        print("Please set the DISCORD_TOKEN environment variable.")
+        print("Error: DISCORD_TOKEN not found in environment or .env file.")
     else:
         bot.run(TOKEN)

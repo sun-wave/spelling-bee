@@ -38,6 +38,7 @@ async def fetch_sb_data(sb_number):
             
             # Words
             words = []
+            pangrams = []
             table = soup.find("table", class_="bee-set")
             if table:
                 rows = table.find_all("tr")
@@ -47,6 +48,9 @@ async def fetch_sb_data(sb_number):
                         # Extract full word, stripping spans
                         word = word_td.get_text(strip=True).upper()
                         words.append(word)
+                        # Check for pangram
+                        if row.find("td", class_="bee-note", string="pangram"):
+                            pangrams.append(word)
             
             if not words:
                 return None
@@ -54,5 +58,6 @@ async def fetch_sb_data(sb_number):
             return {
                 "center": center,
                 "outer": outer,
-                "words": words
+                "words": words,
+                "pangrams": pangrams
             }
