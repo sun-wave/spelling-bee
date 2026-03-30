@@ -121,7 +121,7 @@ async def on_message(message):
                 game.add_found_word(content, message.author.mention)
                 
                 if game.is_complete():
-                    await message.channel.send(f"Correct! **{content}**")
+
                     game = active_games.pop(message.channel.id)
                     await message.channel.send(
                         content="🐝 **QUEEN BEE!** 🐝\nAll words have been found!",

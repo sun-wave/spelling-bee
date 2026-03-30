@@ -65,6 +65,8 @@ class Game:
             return discord.Embed(title="Hints", description="All words found! Queen Bee! 🐝", color=0xF7DA21)
 
         embed = discord.Embed(title="Spelling Bee Hints", color=0xF7DA21)
+        embed.add_field(name="Center Letter", value=f"**{self.center}**", inline=True)
+        embed.add_field(name="Outer Letters", value=" ".join(self.outer), inline=True)
         embed.description = f"Total words left: **{len(remaining)}**"
 
         hints_by_length = {}
@@ -77,10 +79,10 @@ class Game:
             two_letter_counts = Counter([w[:2] for w in words_of_length])
             sorted_combos = sorted(two_letter_counts.items())
             
-            combo_str = "  ".join([f"`{k}-{v}`" for k, v in sorted_combos])
+            combo_str = "  ".join([f"{k}-{v}" for k, v in sorted_combos])
             embed.add_field(
                 name=f"{length} Letter Words ({len(words_of_length)} left)", 
-                value=combo_str, 
+                value=combo_str + "\n\n", 
                 inline=False
             )
             
