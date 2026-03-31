@@ -5,3 +5,4 @@ python-dateutil
 python-dotenv
 curl_cffi
 flask
+aiosqlite

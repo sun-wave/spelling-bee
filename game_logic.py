@@ -91,13 +91,13 @@ class Game:
     def get_found_words_embed(self):
         if not self.found_words:
             return discord.Embed(title="Found Words", description="No words found yet.", color=0xF7DA21)
-        
+
         embed = discord.Embed(
             title="Words Found So Far", 
             description=f"Total words found: **{len(self.found_words)}**", 
             color=0xF7DA21
         )
-        
+
         found_by_two_letters = {}
         for word in sorted(self.found_words.keys()):
             prefix = word[:2]
@@ -105,6 +105,20 @@ class Game:
 
         for prefix in sorted(found_by_two_letters.keys()):
             words = ", ".join(found_by_two_letters[prefix])
-            embed.add_field(name=prefix, value=words, inline=False)
-            
+            embed.add_field(name=prefix, value=words + "\n\n", inline=False)
+
         return embed
+
+    @classmethod
+    def from_dict(cls, data_dict):
+        game = cls(
+            data_dict["center"],
+            data_dict["outer"],
+            data_dict["all_words"], # all_words is what was originally passed as 'words'
+            data_dict["pangrams"],
+            data_dict.get("reactions_enabled", False)
+        )
+        game.found_words = data_dict.get("found_words", {})
+        game.scores = data_dict.get("scores", {})
+        game.found_pangrams = data_dict.get("found_pangrams", {})
+        return game
