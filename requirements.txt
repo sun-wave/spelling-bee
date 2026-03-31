@@ -4,3 +4,4 @@ beautifulsoup4
 python-dateutil
 python-dotenv
 curl_cffi
+flask

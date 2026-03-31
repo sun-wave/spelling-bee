@@ -135,7 +135,16 @@ async def on_message(message):
                     await message.add_reaction("🔁")
 
 if __name__ == "__main__":
+    from dotenv import load_dotenv
+    load_dotenv()
     if not TOKEN:
         print("Error: DISCORD_TOKEN not found in environment or .env file.")
     else:
+        # Start the HTTP server in the background
+        server_command = "python http_server.py"
+        print(f"Starting HTTP server in background: {server_command}")
+        import subprocess
+        # Use subprocess.Popen to run in the background and detach
+        subprocess.Popen(server_command, shell=True, preexec_fn=os.setsid)
+        
         bot.run(TOKEN)
