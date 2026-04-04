@@ -1,3 +1,5 @@
+import logging
+
 from curl_cffi import requests
 from bs4 import BeautifulSoup
 from datetime import datetime
@@ -18,7 +20,7 @@ async def fetch_sb_data(sb_number):
         response = await r.get(url, impersonate="chrome110")
         
         if response.status_code != 200:
-            print(f"Failed to fetch {url} with status code {response.status_code}")
+            logging.error(f"Failed to fetch {url} with status code {response.status_code} and {response.text}")
             return None
 
         html = response.text
@@ -30,12 +32,12 @@ async def fetch_sb_data(sb_number):
             letters_input = soup.find("input", {"name": "string"})
         
         if not letters_input:
-            print(f"Could not find letters input for {url}")
+            logging.error(f"Could not find letters input for {url}")
             return None
         
         letters_str = letters_input.get("value", "")
         if not letters_str:
-            print(f"Letters string is empty for {url}")
+            logging.error(f"Letters string is empty for {url}")
             return None
         
         center = letters_str[0].upper()
@@ -56,7 +58,7 @@ async def fetch_sb_data(sb_number):
                         pangrams.append(word)
         
         if not words:
-            print(f"No words found for {url}")
+            logging.error(f"No words found for {url}")
             return None
             
         return {
@@ -66,5 +68,5 @@ async def fetch_sb_data(sb_number):
             "pangrams": pangrams
         }
     except Exception as e:
-        print(f"An error occurred while fetching data from {url}: {e}")
+        logging.error(f"An error occurred while fetching data from {url}: {e}")
         return None
