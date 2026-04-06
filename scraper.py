@@ -1,6 +1,5 @@
-import logging
-
-from curl_cffi import requests
+import cloudscraper
+import asyncio
 from bs4 import BeautifulSoup
 from datetime import datetime
 
@@ -16,11 +15,14 @@ def get_sb_number(date_obj):
 async def fetch_sb_data(sb_number):
     url = f"https://www.sbsolver.com/s/{sb_number}"
     try:
-        r = requests.AsyncSession()
-        response = await r.get(url, impersonate="chrome110")
+        # Use cloudscraper for better handling of Cloudflare protected sites
+        scraper = cloudscraper.create_scraper()
+        
+        # cloudscraper is synchronous, so run it in a thread to avoid blocking the event loop
+        response = await asyncio.to_thread(scraper.get, url)
         
         if response.status_code != 200:
-            logging.error(f"Failed to fetch {url} with status code {response.status_code} and {response.text}")
+            logging.error(f"Failed to fetch {url} with status code {response.status_code}")
             return None
 
         html = response.text
@@ -68,5 +70,5 @@ async def fetch_sb_data(sb_number):
             "pangrams": pangrams
         }
     except Exception as e:
-        logging.error(f"An error occurred while fetching data from {url}: {e}")
+        print(f"An error occurred while fetching data from {url}: {e}")
         return None
