@@ -1,5 +1,6 @@
 import cloudscraper
 import asyncio
+import logging
 from bs4 import BeautifulSoup
 from datetime import datetime
 
@@ -70,5 +71,5 @@ async def fetch_sb_data(sb_number):
             "pangrams": pangrams
         }
     except Exception as e:
-        print(f"An error occurred while fetching data from {url}: {e}")
+        logging.error(f"An error occurred while fetching data from {url}: {e}")
         return None
