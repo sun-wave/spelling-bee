@@ -131,21 +131,20 @@ async def sb(ctx, *, date_str: str = None):
             await ctx.send("Invalid date format. Use YYYY-MM-DD.")
             return
 
-    current_sb_number = get_sb_number(date_obj)
-    data = await fetch_sb_data(current_sb_number)
+    data = await fetch_sb_data(date_obj)
 
     if not data:
         yesterday_date_obj = date_obj - timedelta(days=1)
-        yesterday_sb_number = get_sb_number(yesterday_date_obj)
-        data = await fetch_sb_data(yesterday_sb_number)
+        data = await fetch_sb_data(yesterday_date_obj)
         
         if not data:
             await ctx.send("Error: Could not retrieve Spelling Bee data for today or yesterday.")
             return
-        date_to_display, sb_num_to_display = yesterday_date_obj, yesterday_sb_number
+        date_to_display = yesterday_date_obj
     else:
-        date_to_display, sb_num_to_display = date_obj, current_sb_number
+        date_to_display = date_obj
 
+    current_sb_number = get_sb_number(date_to_display)
     await clear_game_sessions(ctx.channel.id, ctx.guild.id)
 
     game = Game(data["center"], data["outer"], data["words"], data["pangrams"], reactions_enabled=False)
@@ -153,7 +152,7 @@ async def sb(ctx, *, date_str: str = None):
     active_games[ctx.channel.id] = {"game": game, "session_id": session_id}
     await save_game_session(session_id, ctx.channel.id, ctx.guild.id, game.__dict__)
     
-    await ctx.send(embed=game.get_game_start_embed(sb_num_to_display, date_to_display.strftime('%Y-%m-%d')))
+    await ctx.send(embed=game.get_game_start_embed(current_sb_number, date_to_display.strftime('%Y-%m-%d')))
     logging.info(f"Server {ctx.guild.id}, Channel {ctx.channel.id}: Game started (Session: {session_id}).")
 
 @bot.command()
